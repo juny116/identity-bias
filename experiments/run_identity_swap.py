@@ -1,52 +1,40 @@
-"""Step 2: Run Identity Swap Critique experiment.
+"""Step 2: Run Identity Swap Critique experiment (Experiment 1).
 
-This is the main experiment. For each solution, present it to the critic
-under different identity labels and measure the effect on error detection.
+Same solution presented under different identity labels.
 
 Usage:
     python experiments/run_identity_swap.py \
-        --critic-model gpt-4o \
-        --solutions-file logs/solutions_gpt4o_gsm8k_*.jsonl \
-        --conditions self other_model weak_model anonymous human
+        --critic-model qwen3 \
+        --solutions-file logs/solutions_qwen3_math_*.jsonl \
+        --conditions self other_model anonymous human
 """
 
 import argparse
 from tqdm import tqdm
 from dataclasses import asdict
 
-from identity_bias.config import (
-    IdentityCondition, LLMProvider,
-    get_openai_config, get_anthropic_config, get_vllm_config,
-)
+from identity_bias.config import IdentityCondition, Dataset, MODEL_PRESETS
 from identity_bias.llm import create_llm
-from identity_bias.data.base import Problem, Solution
+from identity_bias.data import check_answer
 from identity_bias.critic.identity_critic import IdentityCritic
-from identity_bias.evaluation.metrics import compute_condition_metrics
+from identity_bias.evaluation.metrics import compute_condition_metrics, compute_self_cross_gap
 from identity_bias.logging.result_logger import ResultLogger
 
-
-MODEL_PRESETS = {
-    "gpt-4o": lambda: get_openai_config("gpt-4o"),
-    "gpt-4o-mini": lambda: get_openai_config("gpt-4o-mini"),
-    "claude-sonnet": lambda: get_anthropic_config("claude-sonnet-4-20250514"),
-    "claude-haiku": lambda: get_anthropic_config("claude-haiku-4-5-20251001"),
-    "llama-70b": lambda base_url="http://localhost:8000/v1": get_vllm_config(
-        "meta-llama/Llama-3.1-70B-Instruct", base_url
-    ),
-}
 
 CONDITION_MAP = {c.value: c for c in IdentityCondition}
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run identity swap critique experiment")
-    parser.add_argument("--critic-model", type=str, required=True, choices=list(MODEL_PRESETS.keys()))
-    parser.add_argument("--solutions-file", type=str, required=True,
-                        help="Path to solutions JSONL file from run_solver.py")
-    parser.add_argument("--conditions", nargs="+", default=["self", "other_model", "weak_model", "anonymous", "human"],
+    parser.add_argument("--critic-model", type=str, required=True,
+                        choices=["qwen3", "gpt-o3", "gemini-flash", "claude-sonnet"])
+    parser.add_argument("--solutions-file", type=str, required=True)
+    parser.add_argument("--conditions", nargs="+",
+                        default=["self", "other_model", "anonymous", "human"],
                         choices=list(CONDITION_MAP.keys()))
-    parser.add_argument("--other-model-name", type=str, default="GPT-4o",
-                        help="Name to display for OTHER_MODEL condition")
+    parser.add_argument("--dataset", type=str, default="math",
+                        choices=[d.value for d in Dataset],
+                        help="Dataset name for answer checking")
     parser.add_argument("--base-url", type=str, default="http://localhost:8000/v1")
     parser.add_argument("--log-dir", type=str, default="logs")
     args = parser.parse_args()
@@ -54,29 +42,28 @@ def main():
     # Load solutions
     print(f"Loading solutions from {args.solutions_file}...")
     problems, solutions = ResultLogger.load_solutions(args.solutions_file)
-    print(f"Loaded {len(problems)} problems ({sum(s.is_correct for s in solutions)} correct, "
-          f"{sum(not s.is_correct for s in solutions)} incorrect)")
+    n_correct = sum(s.is_correct for s in solutions)
+    n_wrong = len(solutions) - n_correct
+    print(f"Loaded {len(problems)} problems ({n_correct} correct, {n_wrong} wrong)")
 
     # Create critic
-    preset = MODEL_PRESETS[args.critic_model]
-    if args.critic_model.startswith("llama"):
-        config = preset(args.base_url)
-    else:
-        config = preset()
-
+    config = MODEL_PRESETS[args.critic_model](base_url=args.base_url)
     llm = create_llm(config)
-    critic = IdentityCritic(llm, model_name=args.critic_model, other_model_name=args.other_model_name)
+    critic = IdentityCritic(llm, model_name=args.critic_model)
 
     conditions = [CONDITION_MAP[c] for c in args.conditions]
-    solutions_map = {s.problem_id: s for s in solutions}
+    dataset = Dataset(args.dataset)
+    ground_truths = {p.id: p.ground_truth for p in problems}
+    check_fn = lambda pred, gt: check_answer(dataset, pred, gt)
 
     # Set up logging
     solver_model = solutions[0].solver_model if solutions else "unknown"
-    exp_name = f"identity_swap_{args.critic_model}_on_{solver_model}"
+    exp_name = f"identity_swap_{args.critic_model}_on_{solver_model}_{args.dataset}"
     logger = ResultLogger(args.log_dir, exp_name)
 
     # Run critique for each condition
     all_critiques = {c.value: [] for c in conditions}
+    all_metrics = {}
 
     for condition in conditions:
         print(f"\n--- Condition: {condition.value} ---")
@@ -86,21 +73,33 @@ def main():
             logger.log_critique(result)
             all_critiques[condition.value].append(result)
 
-    # Compute and display metrics
-    print("\n" + "=" * 80)
-    print("RESULTS SUMMARY")
-    print("=" * 80)
-    print(f"{'Condition':<20} {'Det. Acc':>10} {'TPR':>10} {'FPR':>10} {'Confidence':>12}")
-    print("-" * 62)
+        metrics = compute_condition_metrics(
+            all_critiques[condition.value], check_fn, ground_truths
+        )
+        all_metrics[condition.value] = metrics
+        logger.log_metrics(asdict(metrics))
+
+    # Display results
+    print("\n" + "=" * 90)
+    print("IDENTITY SWAP RESULTS")
+    print("=" * 90)
+    print(f"{'Condition':<15} {'Det.Acc':>8} {'Corr.Succ':>10} {'Harmful':>8} "
+          f"{'FalseErr':>9} {'Confidence':>11}")
+    print("-" * 90)
 
     for condition in conditions:
-        metrics = compute_condition_metrics(
-            all_critiques[condition.value], solutions_map
-        )
-        logger.log_metrics(asdict(metrics))
-        print(f"{condition.value:<20} {metrics.detection_accuracy:>10.3f} "
-              f"{metrics.true_positive_rate:>10.3f} {metrics.false_positive_rate:>10.3f} "
-              f"{metrics.mean_confidence:>12.3f}")
+        m = all_metrics[condition.value]
+        print(f"{condition.value:<15} {m.detection_accuracy:>8.3f} "
+              f"{m.correction_success_rate:>10.3f} {m.harmful_correction_rate:>8.3f} "
+              f"{m.false_error_rate:>9.3f} {m.mean_confidence:>11.3f}")
+
+    # Self vs Cross gap
+    if "self" in all_metrics and "anonymous" in all_metrics:
+        gap = compute_self_cross_gap(all_metrics["self"], all_metrics["anonymous"])
+        print(f"\n--- Self vs Anonymous Gap ---")
+        print(f"  Detection gap:  {gap.detection_gap:+.3f} (positive = anonymous better)")
+        print(f"  Correction gap: {gap.correction_gap:+.3f}")
+        print(f"  Harmful gap:    {gap.harmful_gap:+.3f} (positive = self worse)")
 
     print(f"\nResults saved to: {logger.log_file}")
 

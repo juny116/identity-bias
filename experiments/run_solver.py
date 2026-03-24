@@ -1,38 +1,28 @@
-"""Step 1: Generate solutions for problems.
+"""Step 1: Generate solutions for problems using solver models.
 
 Usage:
-    python experiments/run_solver.py --model gpt-4o --dataset gsm8k --n-samples 100
-    python experiments/run_solver.py --model claude-sonnet --dataset math --n-samples 300
-    python experiments/run_solver.py --model llama-70b --dataset gsm8k --n-samples 500 --base-url http://localhost:8000/v1
+    python experiments/run_solver.py --model qwen3 --dataset math --n-samples 100
+    python experiments/run_solver.py --model gpt-o3 --dataset gpqa --n-samples 80
+    python experiments/run_solver.py --model gemini-flash --dataset bbh --n-samples 120
+    python experiments/run_solver.py --model claude-sonnet --dataset math --n-samples 100
 """
 
 import argparse
 from tqdm import tqdm
 
-from identity_bias.config import (
-    Dataset, LLMProvider,
-    get_openai_config, get_anthropic_config, get_vllm_config,
-)
+from identity_bias.config import Dataset, MODEL_PRESETS
 from identity_bias.llm import create_llm
 from identity_bias.data import load_dataset_problems
 from identity_bias.solver.cot_solver import CoTSolver
 from identity_bias.logging.result_logger import ResultLogger
 
 
-MODEL_PRESETS = {
-    "gpt-4o": lambda: get_openai_config("gpt-4o"),
-    "gpt-4o-mini": lambda: get_openai_config("gpt-4o-mini"),
-    "claude-sonnet": lambda: get_anthropic_config("claude-sonnet-4-20250514"),
-    "claude-haiku": lambda: get_anthropic_config("claude-haiku-4-5-20251001"),
-    "llama-70b": lambda base_url: get_vllm_config("meta-llama/Llama-3.1-70B-Instruct", base_url),
-    "llama-8b": lambda base_url: get_vllm_config("meta-llama/Llama-3.1-8B-Instruct", base_url),
-}
-
-
 def main():
     parser = argparse.ArgumentParser(description="Generate solutions for reasoning problems")
-    parser.add_argument("--model", type=str, required=True, choices=list(MODEL_PRESETS.keys()))
-    parser.add_argument("--dataset", type=str, required=True, choices=[d.value for d in Dataset])
+    parser.add_argument("--model", type=str, required=True,
+                        choices=["qwen3", "gpt-o3", "gemini-flash", "claude-sonnet"])
+    parser.add_argument("--dataset", type=str, required=True,
+                        choices=[d.value for d in Dataset])
     parser.add_argument("--n-samples", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--base-url", type=str, default="http://localhost:8000/v1",
@@ -41,15 +31,9 @@ def main():
     parser.add_argument("--log-dir", type=str, default="logs")
     args = parser.parse_args()
 
-    # Build LLM config
     dataset = Dataset(args.dataset)
-    preset = MODEL_PRESETS[args.model]
-
-    if args.model.startswith("llama"):
-        config = preset(args.base_url)
-    else:
-        config = preset()
-
+    preset_fn = MODEL_PRESETS[args.model]
+    config = preset_fn(base_url=args.base_url)
     config.temperature = args.temperature
 
     # Load problems
@@ -68,7 +52,7 @@ def main():
     # Solve problems
     correct = 0
     total = 0
-    for problem in tqdm(problems, desc="Solving"):
+    for problem in tqdm(problems, desc=f"Solving ({args.model})"):
         solution = solver.solve(problem, dataset)
         logger.log_solution(problem, solution)
         if solution.is_correct:

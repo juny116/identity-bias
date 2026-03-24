@@ -15,13 +15,17 @@ class CritiqueResult:
     """Result of a critic's evaluation."""
     problem_id: str
     identity_condition: str
-    has_error: bool
-    error_step: str | None
+    critic_model: str
+    solver_model: str
+    # Critique outputs
+    is_correct: bool          # Critic's judgment
     error_description: str | None
     corrected_answer: str | None
     confidence: float
+    # Ground truth
+    actually_correct: bool    # Whether the solution was actually correct
+    # Raw data
     raw_response: str
-    critic_model: str
     prompt_tokens: int = 0
     completion_tokens: int = 0
 
@@ -29,15 +33,9 @@ class CritiqueResult:
 class IdentityCritic:
     """Critic that evaluates solutions with identity-conditioned prompts."""
 
-    def __init__(
-        self,
-        llm: BaseLLM,
-        model_name: str = "unknown",
-        other_model_name: str = "GPT-4o",
-    ):
+    def __init__(self, llm: BaseLLM, model_name: str = "unknown"):
         self.llm = llm
         self.model_name = model_name
-        self.other_model_name = other_model_name
 
     def critique(
         self,
@@ -45,22 +43,12 @@ class IdentityCritic:
         solution: Solution,
         identity_condition: IdentityCondition,
     ) -> CritiqueResult:
-        """Critique a solution under the given identity condition.
-
-        Args:
-            problem: The original problem.
-            solution: The solution to critique.
-            identity_condition: The authorship label to present.
-
-        Returns:
-            CritiqueResult with the critic's assessment.
-        """
+        """Critique a solution under the given identity condition."""
         messages = build_critic_messages(
             question=problem.question,
             chain_of_thought=solution.chain_of_thought,
             final_answer=solution.final_answer,
             identity_condition=identity_condition,
-            other_model_name=self.other_model_name,
         )
 
         response = self.llm.generate(messages)
@@ -69,13 +57,14 @@ class IdentityCritic:
         return CritiqueResult(
             problem_id=problem.id,
             identity_condition=identity_condition.value,
-            has_error=parsed.get("has_error", False),
-            error_step=parsed.get("error_step"),
+            critic_model=self.model_name,
+            solver_model=solution.solver_model,
+            is_correct=parsed.get("is_correct", True),
             error_description=parsed.get("error_description"),
             corrected_answer=parsed.get("corrected_answer"),
             confidence=parsed.get("confidence", 0.5),
+            actually_correct=solution.is_correct,
             raw_response=response.text,
-            critic_model=self.model_name,
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
         )
@@ -89,12 +78,7 @@ class IdentityCritic:
         """Critique a solution under all identity conditions."""
         if conditions is None:
             conditions = list(IdentityCondition)
-
-        results = []
-        for condition in conditions:
-            result = self.critique(problem, solution, condition)
-            results.append(result)
-        return results
+        return [self.critique(problem, solution, c) for c in conditions]
 
     def _parse_response(self, text: str) -> dict:
         """Parse the JSON response from the critic."""
@@ -113,19 +97,18 @@ class IdentityCritic:
                 pass
 
         # Try to find any JSON object in the text
-        match = re.search(r"\{[^{}]*\"has_error\"[^{}]*\}", text, re.DOTALL)
+        match = re.search(r"\{[^{}]*\"is_correct\"[^{}]*\}", text, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group(0))
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: return defaults
+        # Fallback
         return {
-            "has_error": False,
-            "error_step": None,
+            "is_correct": True,
             "error_description": None,
             "corrected_answer": None,
             "confidence": 0.5,
-            "parse_error": True,
+            "_parse_error": True,
         }

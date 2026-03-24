@@ -12,6 +12,9 @@ def create_llm(config: LLMConfig) -> BaseLLM:
     elif config.provider == LLMProvider.ANTHROPIC:
         from identity_bias.llm.anthropic_llm import AnthropicLLM
         return AnthropicLLM(config)
+    elif config.provider == LLMProvider.GOOGLE:
+        from identity_bias.llm.google_llm import GoogleLLM
+        return GoogleLLM(config)
     elif config.provider == LLMProvider.VLLM:
         from identity_bias.llm.vllm_llm import VLLMLlm
         return VLLMLlm(config)
