@@ -1,0 +1,3 @@
+[submodule "paper"]
+	path = paper
+	url = https://github.com/juny116/identity-bias-paper.git
