@@ -6,7 +6,7 @@ Produces a matrix of solver x critic performance.
 Usage:
     python experiments/run_solver_critic_matrix.py \
         --solutions-dir logs/ \
-        --critic-models qwen3 gpt-5-mini gemini-flash claude-sonnet \
+        --critic-models qwen3 gpt-oss gemini-flash claude-sonnet \
         --dataset math
 """
 
@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--solutions-dir", type=str, default="logs",
                         help="Directory containing solution JSONL files")
     parser.add_argument("--critic-models", nargs="+", required=True,
-                        choices=["qwen3", "gpt-5-mini", "gemini-flash", "claude-sonnet"])
+                        choices=["qwen3", "gpt-oss", "gemini-flash", "claude-sonnet"])
     parser.add_argument("--dataset", type=str, required=True,
                         choices=[d.value for d in Dataset])
     parser.add_argument("--base-url", type=str, default="http://localhost:8000/v1")

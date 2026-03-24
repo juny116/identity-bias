@@ -93,7 +93,7 @@ class ExperimentConfig:
 # ---- Preset LLM configs ----
 
 # Solver/Critic models (4 families)
-def get_openai_config(model: str = "gpt-5-mini") -> LLMConfig:
+def get_openai_config(model: str = "gpt-oss") -> LLMConfig:
     return LLMConfig(
         provider=LLMProvider.OPENAI,
         model_name=model,
@@ -132,7 +132,7 @@ def get_vllm_config(
 MODEL_PRESETS = {
     # Solver/Critic models
     "qwen3": lambda base_url="http://localhost:8000/v1": get_vllm_config("Qwen/Qwen3-235B-A22B", base_url),
-    "gpt-5-mini": lambda **_: get_openai_config("gpt-5-mini"),
+    "gpt-oss": lambda **_: get_openai_config("gpt-oss"),
     "gemini-flash": lambda **_: get_google_config("gemini-2.5-flash"),
     "claude-sonnet": lambda **_: get_anthropic_config("claude-sonnet-4-20250514"),
     # Judge models
@@ -143,7 +143,7 @@ MODEL_PRESETS = {
 # Display names for identity swap prompts
 MODEL_DISPLAY_NAMES = {
     "qwen3": "Qwen3",
-    "gpt-5-mini": "GPT-5 Mini",
+    "gpt-oss": "GPT-oss",
     "gemini-flash": "Gemini 2.5 Flash",
     "claude-sonnet": "Claude Sonnet",
 }

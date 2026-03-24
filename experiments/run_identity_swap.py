@@ -27,7 +27,7 @@ CONDITION_MAP = {c.value: c for c in IdentityCondition}
 def main():
     parser = argparse.ArgumentParser(description="Run identity swap critique experiment")
     parser.add_argument("--critic-model", type=str, required=True,
-                        choices=["qwen3", "gpt-5-mini", "gemini-flash", "claude-sonnet"])
+                        choices=["qwen3", "gpt-oss", "gemini-flash", "claude-sonnet"])
     parser.add_argument("--solutions-file", type=str, required=True)
     parser.add_argument("--conditions", nargs="+",
                         default=["self", "other_model", "anonymous", "human"],
