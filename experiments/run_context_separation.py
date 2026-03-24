@@ -43,7 +43,7 @@ def build_same_session_messages(question, solution):
 def main():
     parser = argparse.ArgumentParser(description="Run context separation experiment")
     parser.add_argument("--critic-model", type=str, required=True,
-                        choices=["qwen3", "gpt-o3", "gemini-flash", "claude-sonnet"])
+                        choices=["qwen3", "gpt-5-mini", "gemini-flash", "claude-sonnet"])
     parser.add_argument("--solutions-file", type=str, required=True)
     parser.add_argument("--dataset", type=str, required=True,
                         choices=[d.value for d in Dataset])

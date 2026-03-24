@@ -19,7 +19,7 @@ Self-critique failure is partially caused by identity attribution and context an
 
 ### Solver + Critic Models (same models used for both)
 - **Qwen3** (Alibaba) — open-source, served via vLLM
-- **GPT-o3** (OpenAI) — proprietary API
+- **GPT-5 Mini** (OpenAI) — proprietary API
 - **Gemini 2.5 Flash** (Google) — proprietary API
 - **Claude Sonnet** (Anthropic) — proprietary API
 
@@ -139,7 +139,7 @@ Models are worse at detecting and correcting errors in their own solutions than 
 ---
 
 ## 8. Summary
-Models: Qwen3, GPT-o3, Gemini 2.5 Flash, Claude Sonnet
+Models: Qwen3, GPT-5 Mini, Gemini 2.5 Flash, Claude Sonnet
 Judge: GPT-5.4
 Datasets: MATH, GPQA, BBH
 Problems: 200–300 total
