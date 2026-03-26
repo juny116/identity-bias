@@ -32,7 +32,7 @@ def load_bbh(
 
     problems = []
     for task in tasks:
-        ds = load_dataset("maveriq/bigbenchhard", task, split="train")
+        ds = load_dataset("lukaemon/bbh", task, split="test")
 
         for i, item in enumerate(ds):
             problems.append(Problem(
