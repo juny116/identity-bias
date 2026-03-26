@@ -1,7 +1,6 @@
 """Chain-of-thought solver for generating solutions."""
 
 import re
-import json
 
 from identity_bias.config import Dataset
 from identity_bias.data.base import Problem, Solution
@@ -9,11 +8,13 @@ from identity_bias.data import check_answer
 from identity_bias.llm.base import BaseLLM
 
 
-SOLVER_SYSTEM_PROMPT = """You are a careful problem solver. Solve the given problem step by step, showing your complete chain of thought.
+SOLVER_SYSTEM_PROMPT = r"""You are a careful problem solver. Solve the given problem step by step, showing your complete chain of thought.
 
 Format your response as follows:
 1. Show your step-by-step reasoning
-2. End with your final answer on a new line in the format: **Final Answer: <answer>**"""
+2. End with your final answer enclosed in \boxed{}, for example: \boxed{42}
+
+For multiple choice questions, put the letter choice in the box, e.g. \boxed{A}"""
 
 
 SOLVER_USER_PROMPT = """Solve the following problem step by step.
@@ -38,7 +39,7 @@ class CoTSolver:
         response = self.llm.generate(messages)
         cot = response.text
 
-        # Extract final answer
+        # Extract final answer from \boxed{}
         final_answer = self._extract_answer(cot)
 
         # Check correctness
@@ -56,22 +57,36 @@ class CoTSolver:
             },
         )
 
-    def _extract_answer(self, text: str) -> str:
-        """Extract the final answer from the CoT response."""
-        # Look for **Final Answer: ...** pattern
-        match = re.search(r"\*\*Final Answer:\s*(.+?)\*\*", text)
-        if match:
-            return match.group(1).strip()
+    @staticmethod
+    def _extract_boxed(text: str) -> str | None:
+        """Extract content from the last \\boxed{...}, handling nested braces."""
+        # Find all \boxed{ positions, take the last one
+        idx = text.rfind("\\boxed{")
+        if idx == -1:
+            return None
+        start = idx + len("\\boxed{")
+        depth = 1
+        i = start
+        while i < len(text) and depth > 0:
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+            i += 1
+        if depth == 0:
+            return text[start:i - 1].strip()
+        return None
 
-        # Fallback: look for "Final Answer:" without bold
+    def _extract_answer(self, text: str) -> str:
+        """Extract the final answer from \boxed{} in the CoT response."""
+        boxed = self._extract_boxed(text)
+        if boxed is not None:
+            return boxed
+
+        # Fallback: look for "Final Answer:" pattern
         match = re.search(r"Final Answer:\s*(.+)", text)
         if match:
-            return match.group(1).strip()
-
-        # Fallback: look for boxed answer
-        match = re.search(r"\\boxed\{(.+?)\}", text)
-        if match:
-            return match.group(1).strip()
+            return match.group(1).strip().strip("*").strip()
 
         # Last resort: return the last line
         lines = text.strip().split("\n")
@@ -79,8 +94,4 @@ class CoTSolver:
 
     def solve_batch(self, problems: list[Problem], dataset: Dataset) -> list[Solution]:
         """Solve a batch of problems sequentially."""
-        solutions = []
-        for problem in problems:
-            solution = self.solve(problem, dataset)
-            solutions.append(solution)
-        return solutions
+        return [self.solve(problem, dataset) for problem in problems]

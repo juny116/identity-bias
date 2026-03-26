@@ -26,16 +26,7 @@ def load_bbh(
     n_samples: int | None = None,
     seed: int = 42,
 ) -> list[Problem]:
-    """Load problems from BigBench Hard dataset.
-
-    Args:
-        tasks: List of BBH task names. None for default tasks.
-        n_samples: Total number of samples to load. None for all.
-        seed: Random seed for sampling.
-
-    Returns:
-        List of Problem instances.
-    """
+    """Load problems from BigBench Hard dataset."""
     if tasks is None:
         tasks = BBH_TASKS
 
@@ -60,25 +51,20 @@ def load_bbh(
 
 
 def check_bbh_answer(predicted: str, ground_truth: str) -> bool:
-    """Check if the predicted answer matches ground truth for BBH.
+    """Check BBH answer — normalize and compare strings."""
+    def normalize(s: str) -> str:
+        s = s.strip().lower()
+        s = s.strip("()")
+        return s.strip()
 
-    BBH answers are typically short strings (e.g., "(A)", "True", "Yes", a number).
-    """
-    pred = predicted.strip().lower()
-    truth = ground_truth.strip().lower()
+    pred = normalize(predicted)
+    truth = normalize(ground_truth)
 
-    # Direct match
     if pred == truth:
         return True
 
-    # Check if ground truth is contained in prediction (e.g., "(A)" in "The answer is (A)")
-    if truth in pred:
-        return True
-
-    # Check parenthetical match: "(A)" == "A"
-    pred_clean = pred.strip("()").strip()
-    truth_clean = truth.strip("()").strip()
-    if pred_clean == truth_clean:
+    # For True/False, Yes/No type answers
+    if truth in pred.split():
         return True
 
     return False

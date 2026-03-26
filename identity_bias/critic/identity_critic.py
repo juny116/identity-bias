@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from identity_bias.config import IdentityCondition
 from identity_bias.data.base import Problem, Solution
-from identity_bias.critic.prompts import build_critic_messages
+from identity_bias.critic.prompts import build_critic_messages, strip_thinking
 from identity_bias.llm.base import BaseLLM
 
 
@@ -82,6 +82,9 @@ class IdentityCritic:
 
     def _parse_response(self, text: str) -> dict:
         """Parse the JSON response from the critic."""
+        # Strip <think>...</think> blocks from reasoning models
+        text = strip_thinking(text)
+
         # Try direct JSON parse
         try:
             return json.loads(text)
@@ -96,8 +99,10 @@ class IdentityCritic:
             except json.JSONDecodeError:
                 pass
 
-        # Try to find any JSON object in the text
-        match = re.search(r"\{[^{}]*\"is_correct\"[^{}]*\}", text, re.DOTALL)
+        # Try to find any JSON object in the text (allowing nested braces)
+        match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\"is_correct\"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
+        if not match:
+            match = re.search(r"\{.*\"is_correct\".*\}", text, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group(0))

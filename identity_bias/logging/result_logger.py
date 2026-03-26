@@ -12,12 +12,35 @@ from identity_bias.critic.identity_critic import CritiqueResult
 class ResultLogger:
     """Logs experiment results to JSONL files."""
 
-    def __init__(self, log_dir: str | Path, experiment_name: str):
+    def __init__(self, log_dir: str | Path, experiment_name: str,
+                 resume: bool = True):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.experiment_name = experiment_name
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_file = self.log_dir / f"{experiment_name}_{timestamp}.jsonl"
+        self.log_file = self.log_dir / f"{experiment_name}.jsonl"
+
+        if not resume and self.log_file.exists():
+            self.log_file.unlink()
+
+    def get_completed_ids(self, record_type: str = "solution") -> set[str]:
+        """Get IDs of already-completed records for resume."""
+        completed = set()
+        if not self.log_file.exists():
+            return completed
+        with open(self.log_file) as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if record["type"] == record_type:
+                    if record_type == "solution":
+                        completed.add(record["problem"]["id"])
+                    elif record_type == "critique":
+                        crit = record["critique"]
+                        # key = (problem_id, condition)
+                        completed.add(f"{crit['problem_id']}_{crit['identity_condition']}")
+        return completed
 
     def log_solution(self, problem: Problem, solution: Solution) -> None:
         """Log a generated solution."""

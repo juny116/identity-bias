@@ -19,3 +19,4 @@ logs/*.json
 *.fdb_latexmk
 *.synctex.gz
 paper/*.pdf
+run*

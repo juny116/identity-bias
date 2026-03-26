@@ -19,6 +19,7 @@ class IdentityCondition(Enum):
     """Authorship labels for the identity swap experiment."""
     SELF = "self"
     OTHER_MODEL = "other_model"
+    WEAK_MODEL = "weak_model"
     ANONYMOUS = "anonymous"
     HUMAN = "human"
 
@@ -52,7 +53,7 @@ class LLMConfig:
     api_key: str | None = None
     base_url: str | None = None  # For vLLM
     temperature: float = 0.0
-    max_tokens: int = 2048
+    max_tokens: int = 25000
     top_logprobs: int = 5
 
 
@@ -118,7 +119,7 @@ def get_google_config(model: str = "gemini-2.5-flash") -> LLMConfig:
 
 
 def get_vllm_config(
-    model: str = "Qwen/Qwen3-235B-A22B",
+    model: str = "Qwen/Qwen3-32B",
     base_url: str = "http://localhost:8000/v1",
 ) -> LLMConfig:
     return LLMConfig(
@@ -131,7 +132,7 @@ def get_vllm_config(
 # Model presets for CLI
 MODEL_PRESETS = {
     # Solver/Critic models
-    "qwen3": lambda base_url="http://localhost:8000/v1": get_vllm_config("Qwen/Qwen3-235B-A22B", base_url),
+    "qwen3": lambda base_url="http://localhost:8000/v1": get_vllm_config("Qwen/Qwen3-32B", base_url),
     "gpt-oss": lambda **_: get_openai_config("gpt-oss"),
     "gemini-flash": lambda **_: get_google_config("gemini-2.5-flash"),
     "claude-sonnet": lambda **_: get_anthropic_config("claude-sonnet-4-20250514"),

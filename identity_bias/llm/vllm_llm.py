@@ -14,6 +14,7 @@ class VLLMLlm(BaseLLM):
         self.client = OpenAI(
             api_key="EMPTY",
             base_url=config.base_url or "http://localhost:8000/v1",
+            timeout=600.0,
         )
 
     def generate(self, messages: list[dict[str, str]], **kwargs) -> LLMResponse:

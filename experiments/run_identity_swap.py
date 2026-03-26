@@ -3,13 +3,12 @@
 Same solution presented under different identity labels.
 
 Usage:
-    python experiments/run_identity_swap.py \
-        --critic-model qwen3 \
-        --solutions-file logs/solutions_qwen3_math_*.jsonl \
-        --conditions self other_model anonymous human
+    python experiments/run_identity_swap.py --critic-model qwen3 --solutions-file logs/solutions_qwen3_math.jsonl
+    python experiments/run_identity_swap.py --critic-model qwen3 --solutions-file logs/solutions_qwen3_math.jsonl --fresh
 """
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from dataclasses import asdict
 
@@ -30,13 +29,16 @@ def main():
                         choices=["qwen3", "gpt-oss", "gemini-flash", "claude-sonnet"])
     parser.add_argument("--solutions-file", type=str, required=True)
     parser.add_argument("--conditions", nargs="+",
-                        default=["self", "other_model", "anonymous", "human"],
+                        default=["self", "other_model", "weak_model", "anonymous", "human"],
                         choices=list(CONDITION_MAP.keys()))
     parser.add_argument("--dataset", type=str, default="math",
                         choices=[d.value for d in Dataset],
                         help="Dataset name for answer checking")
     parser.add_argument("--base-url", type=str, default="http://localhost:8000/v1")
     parser.add_argument("--log-dir", type=str, default="logs")
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--fresh", action="store_true",
+                        help="Start fresh (delete existing log)")
     args = parser.parse_args()
 
     # Load solutions
@@ -56,10 +58,12 @@ def main():
     ground_truths = {p.id: p.ground_truth for p in problems}
     check_fn = lambda pred, gt: check_answer(dataset, pred, gt)
 
-    # Set up logging
+    # Set up logging (resume by default)
     solver_model = solutions[0].solver_model if solutions else "unknown"
     exp_name = f"identity_swap_{args.critic_model}_on_{solver_model}_{args.dataset}"
-    logger = ResultLogger(args.log_dir, exp_name)
+    logger = ResultLogger(args.log_dir, exp_name, resume=not args.fresh)
+
+    completed = logger.get_completed_ids("critique")
 
     # Run critique for each condition
     all_critiques = {c.value: [] for c in conditions}
@@ -67,17 +71,45 @@ def main():
 
     for condition in conditions:
         print(f"\n--- Condition: {condition.value} ---")
-        for problem, solution in tqdm(zip(problems, solutions), total=len(problems),
-                                       desc=condition.value):
-            result = critic.critique(problem, solution, condition)
-            logger.log_critique(result)
-            all_critiques[condition.value].append(result)
+
+        # Filter out already completed
+        pairs = []
+        for p, s in zip(problems, solutions):
+            key = f"{p.id}_{condition.value}"
+            if key not in completed:
+                pairs.append((p, s))
+
+        print(f"  Already done: {len(problems) - len(pairs)}, remaining: {len(pairs)}")
+
+        def critique_one(ps, cond=condition):
+            p, s = ps
+            return critic.critique(p, s, cond)
+
+        errors = 0
+        if pairs:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = {pool.submit(critique_one, pair): pair for pair in pairs}
+                for future in tqdm(as_completed(futures), total=len(pairs),
+                                   desc=condition.value):
+                    try:
+                        result = future.result()
+                        logger.log_critique(result)
+                    except Exception as e:
+                        errors += 1
+                        tqdm.write(f"[ERROR] {e}")
+        if errors:
+            print(f"  Skipped {errors} critiques due to errors")
+
+        # Load all critiques for this condition (including previously completed)
+        all_logged = ResultLogger.load_critiques(logger.log_file)
+        all_critiques[condition.value] = [
+            c for c in all_logged if c.identity_condition == condition.value
+        ]
 
         metrics = compute_condition_metrics(
             all_critiques[condition.value], check_fn, ground_truths
         )
         all_metrics[condition.value] = metrics
-        logger.log_metrics(asdict(metrics))
 
     # Display results
     print("\n" + "=" * 90)
