@@ -15,6 +15,9 @@ def create_llm(config: LLMConfig) -> BaseLLM:
     elif config.provider == LLMProvider.GOOGLE:
         from identity_bias.llm.google_llm import GoogleLLM
         return GoogleLLM(config)
+    elif config.provider == LLMProvider.OPENAI_RESPONSES:
+        from identity_bias.llm.openai_responses_llm import OpenAIResponsesLLM
+        return OpenAIResponsesLLM(config)
     elif config.provider == LLMProvider.VLLM:
         from identity_bias.llm.vllm_llm import VLLMLlm
         return VLLMLlm(config)

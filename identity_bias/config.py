@@ -36,10 +36,15 @@ class Dataset(Enum):
     MATH = "math"
     GPQA = "gpqa"
     BBH = "bbh"
+    AIME = "aime"
+    MMLU_PRO = "mmlu_pro"
+    OLYMPIAD = "olympiad"
+    MINERVA = "minerva"
 
 
 class LLMProvider(Enum):
     OPENAI = "openai"
+    OPENAI_RESPONSES = "openai_responses"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
     VLLM = "vllm"
@@ -53,7 +58,7 @@ class LLMConfig:
     api_key: str | None = None
     base_url: str | None = None  # For vLLM
     temperature: float = 0.0
-    max_tokens: int = 25000
+    max_tokens: int = 40000
     top_logprobs: int = 5
 
 
@@ -102,6 +107,14 @@ def get_openai_config(model: str = "gpt-oss") -> LLMConfig:
     )
 
 
+def get_openai_responses_config(model: str = "gpt-5-mini") -> LLMConfig:
+    return LLMConfig(
+        provider=LLMProvider.OPENAI_RESPONSES,
+        model_name=model,
+        api_key=os.environ.get("OPENAI_API_KEY"),
+    )
+
+
 def get_anthropic_config(model: str = "claude-sonnet-4-20250514") -> LLMConfig:
     return LLMConfig(
         provider=LLMProvider.ANTHROPIC,
@@ -133,8 +146,13 @@ def get_vllm_config(
 MODEL_PRESETS = {
     # Solver/Critic models
     "qwen3": lambda base_url="http://localhost:8000/v1": get_vllm_config("Qwen/Qwen3-32B", base_url),
-    "gpt-oss": lambda **_: get_openai_config("gpt-oss"),
+    "gpt-oss": lambda base_url="http://localhost:8000/v1": get_vllm_config("openai/gpt-oss-20b", base_url),
+    "gpt-oss-120b": lambda base_url="http://localhost:8000/v1": get_vllm_config("openai/gpt-oss-120b", base_url),
+    "glm-4.7-flash": lambda base_url="http://localhost:8000/v1": get_vllm_config("zai-org/GLM-4.7-Flash", base_url),
+    "ministral-14b": lambda base_url="http://localhost:8000/v1": get_vllm_config("mistralai/Ministral-3-14B-Reasoning-2512", base_url),
+    "gpt-5-mini": lambda **_: get_openai_responses_config("gpt-5-mini"),
     "gemini-flash": lambda **_: get_google_config("gemini-2.5-flash"),
+    "gemini-3-flash": lambda **_: get_google_config("gemini-3-flash-preview"),
     "claude-sonnet": lambda **_: get_anthropic_config("claude-sonnet-4-20250514"),
     # Judge models
     "gpt-5.4": lambda **_: get_openai_config("gpt-5.4"),
@@ -145,6 +163,10 @@ MODEL_PRESETS = {
 MODEL_DISPLAY_NAMES = {
     "qwen3": "Qwen3",
     "gpt-oss": "GPT-oss",
+    "glm-4.7-flash": "GLM-4.7-Flash",
+    "ministral-14b": "Ministral-3-14B",
+    "gpt-5-mini": "GPT-5 Mini",
     "gemini-flash": "Gemini 2.5 Flash",
+    "gemini-3-flash": "Gemini 3 Flash",
     "claude-sonnet": "Claude Sonnet",
 }

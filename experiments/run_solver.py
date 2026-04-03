@@ -19,7 +19,7 @@ from identity_bias.logging.result_logger import ResultLogger
 def main():
     parser = argparse.ArgumentParser(description="Generate solutions for reasoning problems")
     parser.add_argument("--model", type=str, required=True,
-                        choices=["qwen3", "gpt-oss", "gemini-flash", "claude-sonnet"])
+                        choices=["qwen3", "gpt-oss", "gpt-oss-120b", "glm-4.7-flash", "ministral-14b", "gpt-5-mini", "gemini-flash", "gemini-3-flash", "claude-sonnet"])
     parser.add_argument("--dataset", type=str, required=True,
                         choices=[d.value for d in Dataset])
     parser.add_argument("--n-samples", type=int, default=None,
